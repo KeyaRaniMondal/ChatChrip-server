@@ -28,6 +28,7 @@ async function run() {
     });
 
     const userCollection = client.db("ForumWebsite").collection("users");
+    const postCollection = client.db("ForumWebsite").collection("posts");
 
 //for users
     app.get('/users',async(req,res)=>{
@@ -39,6 +40,18 @@ async function run() {
       const result=await userCollection.insertOne(user)
       res.send(result)
     })
+
+
+// for posts
+app.post('/posts',async(req,res)=>{
+  const item=req.body
+  const result= await postCollection.insertOne(item)
+  res.send(result)
+})
+app.get('/posts',async(req,res)=>{
+  const result= await postCollection.find().toArray()
+  res.send(result)
+})
  
     // Ping the database
     await client.db("admin").command({ ping: 1 });

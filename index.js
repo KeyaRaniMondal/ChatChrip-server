@@ -30,29 +30,52 @@ async function run() {
     const userCollection = client.db("ForumWebsite").collection("users");
     const postCollection = client.db("ForumWebsite").collection("posts");
 
-//for users
-    app.get('/users',async(req,res)=>{
-      const result=await userCollection.find().toArray()
-      res.send(result)
-    })
-    app.post('/users',async(req,res)=>{
-      const user=req.body
-      const result=await userCollection.insertOne(user)
+    //for users
+
+    app.get('/users', async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+      const result = await userCollection.findOne({ email });
+      if (result) {
+        res.send(result);
+      } else {
+        res.status(404).send({ message: "User not found" });
+      }
+    });
+
+    app.post('/users', async (req, res) => {
+      const user = req.body;
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+
+
+    // for posts
+    app.post('/posts', async (req, res) => {
+      const item = req.body
+      const result = await postCollection.insertOne(item)
       res.send(result)
     })
 
+    app.get('/posts', async (req, res) => {
+      const { email } = req.query;
+      if (!email) {
+        return res.status(400).send({ message: "Email is required." });
+      }
 
-// for posts
-app.post('/posts',async(req,res)=>{
-  const item=req.body
-  const result= await postCollection.insertOne(item)
-  res.send(result)
-})
-app.get('/posts',async(req,res)=>{
-  const result= await postCollection.find().toArray()
-  res.send(result)
-})
- 
+      try {
+        const result = await postCollection.find({ authoremail: email }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+        res.status(500).send({ message: "Failed to fetch posts." });
+      }
+    });
+
+
     // Ping the database
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully connected to MongoDB!");

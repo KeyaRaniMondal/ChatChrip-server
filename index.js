@@ -2,7 +2,7 @@ const express = require('express');
 require('dotenv').config();
 const app = express();
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
 app.use(cors());
@@ -76,6 +76,20 @@ async function run() {
       }
     });
     
+
+    //Post Details
+    app.get('/posts/:id',async(req,res)=>{
+      try{
+      const postId=req.params.id
+      const post=await postCollection.findOne({_id:new ObjectId(postId)});
+      if (!post) {
+        return res.status(404).json({ message: 'post not found' });
+      }
+      res.json(post);
+    } catch (error) {
+      res.status(500).json({ message: 'Error fetching Post details', error });
+    }
+    })
     
 
     // Ping the database

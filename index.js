@@ -62,19 +62,21 @@ async function run() {
 
     app.get('/posts', async (req, res) => {
       const { email } = req.query;
-      if (!email) {
-        return res.status(400).send({ message: "Email is required." });
-      }
-
       try {
-        const result = await postCollection.find({ authoremail: email }).toArray();
+        let query = {}; //fetch all posts
+        if (email) {
+          query = { authoremail: email }; // Filter by email 
+        }
+    
+        const result = await postCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.error("Error fetching posts:", error);
         res.status(500).send({ message: "Failed to fetch posts." });
       }
     });
-
+    
+    
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

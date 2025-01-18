@@ -67,7 +67,7 @@ async function run() {
         if (email) {
           query = { authoremail: email }; // Filter by email 
         }
-    
+
         const result = await postCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
@@ -75,22 +75,40 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch posts." });
       }
     });
-    
+
 
     //Post Details
-    app.get('/posts/:id',async(req,res)=>{
-      try{
-      const postId=req.params.id
-      const post=await postCollection.findOne({_id:new ObjectId(postId)});
-      if (!post) {
-        return res.status(404).json({ message: 'post not found' });
+    app.get('/posts/:id', async (req, res) => {
+      try {
+        const postId = req.params.id
+        const post = await postCollection.findOne({ _id: new ObjectId(postId) });
+        if (!post) {
+          return res.status(404).json({ message: 'post not found' });
+        }
+        res.json(post);
+      } catch (error) {
+        res.status(500).json({ message: 'Error fetching Post details', error });
       }
-      res.json(post);
-    } catch (error) {
-      res.status(500).json({ message: 'Error fetching Post details', error });
-    }
     })
-    
+
+    //for upvote and downvote in post details page
+    app.patch('/posts/:id/vote', async (req, res) => {
+      const { id } = req.params;
+      const { voteType } = req.body;
+      try {
+        const updateField = voteType === 'upvote' ? { $inc: { upvote: 1 } } : { $inc: { downvote: 1 } };
+        const result = await postCollection.updateOne({ _id: new ObjectId(id) }, updateField);
+
+        if (result.modifiedCount === 1) {
+          res.status(200).send({ message: 'Vote updated successfully' });
+        } else {
+          res.status(404).send({ message: 'Post not found' });
+        }
+      } catch (error) {
+        console.error('Error updating vote:', error);
+        res.status(500).send({ message: 'Failed to update vote' });
+      }
+    });
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

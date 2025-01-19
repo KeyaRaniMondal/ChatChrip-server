@@ -76,30 +76,41 @@ async function run() {
     //   }
     // });
 
-    app.get("/posts", async (req, res) => {
-      const { search, tags } = req.query;
-
+    app.get('/posts', async (req, res) => {
       try {
-        const query = {};
+        const { search, tags, sortByPopularity } = req.query;
+    
+        const filter = {};
         if (search) {
-          query.$or = [
-            { posttitle: { $regex: search, $options: "i" } },
-            { postdescription: { $regex: search, $options: "i" } },
-          ];
+          filter.posttitle = { $regex: search, $options: 'i' }; 
         }
-
         if (tags) {
-          const tagsArray = tags.split(",");
-          query.tags = { $in: tagsArray };
+          filter.tags = { $in: tags.split(",") };
         }
-
-        const result = await postCollection.find(query).toArray();
-        res.send(result);
+    
+        const sort = sortByPopularity === "true"
+          ? { voteDifference: -1 } 
+          : { createdAt: -1 }; 
+    
+        const posts = await postCollection.aggregate([
+          { $match: filter },
+          {
+            $addFields: {
+              upvote: { $ifNull: ["$upvote", 0] }, 
+              downvote: { $ifNull: ["$downvote", 0] },
+              voteDifference: { $subtract: [{ $ifNull: ["$upvote", 0] }, { $ifNull: ["$downvote", 0] }] },
+            },
+          },
+          { $sort: sort },
+        ]).toArray();
+    
+        res.json(posts);
       } catch (error) {
-        console.error("Error fetching posts:", error);
-        res.status(500).send({ message: "Failed to fetch posts." });
+        res.status(500).send({ message: 'Error fetching posts', error });
       }
     });
+    
+    
 
 
 

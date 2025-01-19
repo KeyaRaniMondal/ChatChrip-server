@@ -60,12 +60,37 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/posts', async (req, res) => {
-      const { email } = req.query;
+    // app.get('/posts', async (req, res) => {
+    //   const { email } = req.query;
+    //   try {
+    //     let query = {}; //fetch all posts
+    //     if (email) {
+    //       query = { authoremail: email }; // Filter by email 
+    //     }
+
+    //     const result = await postCollection.find(query).toArray();
+    //     res.send(result);
+    //   } catch (error) {
+    //     console.error("Error fetching posts:", error);
+    //     res.status(500).send({ message: "Failed to fetch posts." });
+    //   }
+    // });
+
+    app.get("/posts", async (req, res) => {
+      const { search, tags } = req.query;
+
       try {
-        let query = {}; //fetch all posts
-        if (email) {
-          query = { authoremail: email }; // Filter by email 
+        const query = {};
+        if (search) {
+          query.$or = [
+            { posttitle: { $regex: search, $options: "i" } },
+            { postdescription: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        if (tags) {
+          const tagsArray = tags.split(",");
+          query.tags = { $in: tagsArray };
         }
 
         const result = await postCollection.find(query).toArray();
@@ -75,6 +100,8 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch posts." });
       }
     });
+
+
 
 
     //Post Details
@@ -109,6 +136,54 @@ async function run() {
         res.status(500).send({ message: 'Failed to update vote' });
       }
     });
+
+
+    // for adding Comments
+    app.post('/posts/:id/comments', async (req, res) => {
+      const { id } = req.params;
+      const { text } = req.body;
+      const user = req.user;
+
+      const comment = {
+        text,
+        author: user.name || 'Anonymous',
+        createdAt: new Date(),
+      };
+
+      try {
+        const result = await postCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $push: { comments: comment } }
+        );
+
+        if (result.modifiedCount === 1) {
+          res.status(201).send({ message: 'Comment added successfully' });
+        } else {
+          res.status(404).send({ message: 'Post not found' });
+        }
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).send({ message: 'Failed to add comment' });
+      }
+    });
+
+    app.get('/posts/:id/comments', async (req, res) => {
+      const { id } = req.params;
+
+      try {
+        const post = await postCollection.findOne({ _id: new ObjectId(id) });
+        if (post) {
+          res.status(200).send(post.comments || []);
+        } else {
+          res.status(404).send({ message: 'Post not found' });
+        }
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+        res.status(500).send({ message: 'Failed to fetch comments' });
+      }
+    });
+
+
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

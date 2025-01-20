@@ -46,13 +46,13 @@ async function run() {
     // });
     app.get('/users', async (req, res) => {
       try {
-        const users = await userCollection.find().toArray(); 
+        const users = await userCollection.find().toArray();
         res.send(users);
       } catch (error) {
         res.status(500).send({ message: 'Failed to fetch users', error });
       }
     });
-    
+
 
     app.post('/users', async (req, res) => {
       const user = req.body;
@@ -63,53 +63,69 @@ async function run() {
 
 
     // for posts
+    // API to count posts for a specific user
+    app.get("/posts/count", async (req, res) => {
+      try {
+        const { email } = req.query;
+
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+
+        const postCount = await postCollection.countDocuments({ authoremail: email });
+
+        res.json({ count: postCount });
+      } catch (error) {
+        res.status(500).send({ message: "Error counting posts", error });
+      }
+    });
+
+
     app.post('/posts', async (req, res) => {
-      const item = req.body
-      const result = await postCollection.insertOne(item)
-      res.send(result)
-    })
+      try {
+        const item = req.body;
+        const { authoremail } = item;
 
-    // app.get('/posts', async (req, res) => {
-    //   const { email } = req.query;
-    //   try {
-    //     let query = {}; //fetch all posts
-    //     if (email) {
-    //       query = { authoremail: email }; // Filter by email 
-    //     }
+        // Count the user's posts before allowing to post a new one
+        const postCount = await postCollection.countDocuments({ authoremail });
 
-    //     const result = await postCollection.find(query).toArray();
-    //     res.send(result);
-    //   } catch (error) {
-    //     console.error("Error fetching posts:", error);
-    //     res.status(500).send({ message: "Failed to fetch posts." });
-    //   }
-    // });
+        if (postCount >= 5) {
+          return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
+        }
+
+        const result = await postCollection.insertOne(item);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Error posting new post', error });
+      }
+    });
+
 
     app.get("/posts", async (req, res) => {
       try {
         const { email, search, tags, sortByPopularity } = req.query;
-    
+
         const filter = {};
-    
+
         if (email) {
           filter.authoremail = email;
         }
-    
+
         if (search) {
           filter.$or = [
             { posttitle: { $regex: search, $options: "i" } },
             { postdescription: { $regex: search, $options: "i" } },
           ];
         }
-    
+
         if (tags) {
-          filter.tags = { $all: tags.split(",") }; 
+          filter.tags = { $all: tags.split(",") };
         }
-    
+
         const sort = sortByPopularity === "true"
           ? { voteDifference: -1 }
           : { createdAt: -1 };
-    
+
         const posts = await postCollection.aggregate([
           { $match: filter },
           {
@@ -121,13 +137,13 @@ async function run() {
           },
           { $sort: sort },
         ]).toArray();
-    
+
         res.json(posts);
       } catch (error) {
         res.status(500).send({ message: 'Error fetching posts', error });
       }
     });
-    
+
 
 
 
@@ -167,7 +183,7 @@ async function run() {
 
 
     // for adding Comments
-   
+
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

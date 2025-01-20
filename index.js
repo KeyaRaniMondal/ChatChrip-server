@@ -32,18 +32,27 @@ async function run() {
 
     //for users
 
+    // app.get('/users', async (req, res) => {
+    //   const email = req.query.email;
+    //   if (!email) {
+    //     return res.status(400).send({ message: "Email is required" });
+    //   }
+    //   const result = await userCollection.findOne({ email });
+    //   if (result) {
+    //     res.send(result);
+    //   } else {
+    //     res.status(404).send({ message: "User not found" });
+    //   }
+    // });
     app.get('/users', async (req, res) => {
-      const email = req.query.email;
-      if (!email) {
-        return res.status(400).send({ message: "Email is required" });
-      }
-      const result = await userCollection.findOne({ email });
-      if (result) {
-        res.send(result);
-      } else {
-        res.status(404).send({ message: "User not found" });
+      try {
+        const users = await userCollection.find().toArray(); 
+        res.send(users);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch users', error });
       }
     });
+    
 
     app.post('/users', async (req, res) => {
       const user = req.body;
@@ -76,27 +85,36 @@ async function run() {
     //   }
     // });
 
-    app.get('/posts', async (req, res) => {
+    app.get("/posts", async (req, res) => {
       try {
-        const { search, tags, sortByPopularity } = req.query;
+        const { email, search, tags, sortByPopularity } = req.query;
     
         const filter = {};
-        if (search) {
-          filter.posttitle = { $regex: search, $options: 'i' }; 
+    
+        if (email) {
+          filter.authoremail = email;
         }
+    
+        if (search) {
+          filter.$or = [
+            { posttitle: { $regex: search, $options: "i" } },
+            { postdescription: { $regex: search, $options: "i" } },
+          ];
+        }
+    
         if (tags) {
-          filter.tags = { $in: tags.split(",") };
+          filter.tags = { $all: tags.split(",") }; 
         }
     
         const sort = sortByPopularity === "true"
-          ? { voteDifference: -1 } 
-          : { createdAt: -1 }; 
+          ? { voteDifference: -1 }
+          : { createdAt: -1 };
     
         const posts = await postCollection.aggregate([
           { $match: filter },
           {
             $addFields: {
-              upvote: { $ifNull: ["$upvote", 0] }, 
+              upvote: { $ifNull: ["$upvote", 0] },
               downvote: { $ifNull: ["$downvote", 0] },
               voteDifference: { $subtract: [{ $ifNull: ["$upvote", 0] }, { $ifNull: ["$downvote", 0] }] },
             },
@@ -109,7 +127,6 @@ async function run() {
         res.status(500).send({ message: 'Error fetching posts', error });
       }
     });
-    
     
 
 
@@ -150,51 +167,7 @@ async function run() {
 
 
     // for adding Comments
-    app.post('/posts/:id/comments', async (req, res) => {
-      const { id } = req.params;
-      const { text } = req.body;
-      const user = req.user;
-
-      const comment = {
-        text,
-        author: user.name || 'Anonymous',
-        createdAt: new Date(),
-      };
-
-      try {
-        const result = await postCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $push: { comments: comment } }
-        );
-
-        if (result.modifiedCount === 1) {
-          res.status(201).send({ message: 'Comment added successfully' });
-        } else {
-          res.status(404).send({ message: 'Post not found' });
-        }
-      } catch (error) {
-        console.error('Error adding comment:', error);
-        res.status(500).send({ message: 'Failed to add comment' });
-      }
-    });
-
-    app.get('/posts/:id/comments', async (req, res) => {
-      const { id } = req.params;
-
-      try {
-        const post = await postCollection.findOne({ _id: new ObjectId(id) });
-        if (post) {
-          res.status(200).send(post.comments || []);
-        } else {
-          res.status(404).send({ message: 'Post not found' });
-        }
-      } catch (error) {
-        console.error('Error fetching comments:', error);
-        res.status(500).send({ message: 'Failed to fetch comments' });
-      }
-    });
-
-
+   
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

@@ -1,4 +1,5 @@
 const express = require('express');
+const stripe=require('stripe')('process.env.STRIPE_SECRET_KEY');
 require('dotenv').config();
 const app = express();
 const cors = require('cors');
@@ -149,15 +150,15 @@ app.get("/posts", async (req, res) => {
     //payment
     app.post('/create-payment-intent', async (req, res) => {
       const { price } = req.body;
-      const amount = Math.round(price * 100);
-  
+      const amount = Math.round(price * 100); 
+    
       try {
           const paymentIntent = await stripe.paymentIntents.create({
               amount: amount,
               currency: 'usd',
               payment_method_types: ['card'],
           });
-  
+    
           res.send({
               clientSecret: paymentIntent.client_secret,
           });
@@ -167,12 +168,30 @@ app.get("/posts", async (req, res) => {
       }
   });
   
-  app.post('/payments',async(req,res)=>{
-    const payment=req.body
-    const paymentResult=await paymentCollection.insertOne(payment)
-    console.log(payment)
-    res.send(paymentResult)
-  })
+  
+  
+  app.post('/payments', async (req, res) => {
+    const payment = req.body;
+    const paymentResult = await paymentCollection.insertOne(payment);
+    console.log(payment);
+    res.send(paymentResult);
+});
+
+app.post('/update-membership', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+      const result = await userCollection.updateOne(
+          { email: email },
+          { $set: { isMember: true } } 
+      );
+      res.send({ message: 'Membership updated successfully', result });
+  } catch (error) {
+      console.error('Error updating membership:', error);
+      res.status(500).send({ error: error.message });
+  }
+});
+
 
 
 

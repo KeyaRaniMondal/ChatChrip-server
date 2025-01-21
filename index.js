@@ -1,5 +1,5 @@
 const express = require('express');
-const stripe = require('stripe')('process.env.STRIPE_SECRET_KEY');
+const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
 require('dotenv').config();
 const app = express();
 const cors = require('cors');
@@ -82,25 +82,29 @@ async function run() {
       }
     });
 
-
     app.post('/posts', async (req, res) => {
       try {
         const item = req.body;
         const { authoremail } = item;
-
-        // Count the user's posts before allowing to post a new one
-        const postCount = await postCollection.countDocuments({ authoremail });
-
-        if (postCount >= 5) {
-          return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
+        const user = await userCollection.findOne({ authoremail });
+        const hasMembership = user?.membership === 'subscribed';
+        if (!hasMembership) {
+          const postCount = await postCollection.countDocuments({ authoremail });
+          const maxPosts = user?.maxPosts || 5;
+          if (postCount >= maxPosts) {
+            return res.status(400).send({
+              message: `You have reached your post limit of ${maxPosts}. Please become a member to post more.`,
+            });
+          }
         }
-
         const result = await postCollection.insertOne(item);
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: 'Error posting new post', error });
       }
     });
+
+
 
 
     app.get("/posts", async (req, res) => {
@@ -178,19 +182,28 @@ async function run() {
     });
 
     app.post('/update-membership', async (req, res) => {
-      const { email } = req.body;
-
+      const { email, paymentId } = req.body;
       try {
-        const result = await userCollection.updateOne(
-          { email: email },
-          { $set: { isMember: true } }
-        );
-        res.send({ message: 'Membership updated successfully', result });
+        const payment = await paymentCollection.findOne({ paymentId });
+        if (!payment) {
+          return res.status(400).send({ success: false, message: 'Payment not found or invalid' });
+        }
+
+        const user = await userCollection.findOneAndUpdate(
+          { email },
+          { $set: { badge: 'gold', membership: 'subscribed', maxPosts: 10 } },
+          { returnDocument: "after" }
+        )
+        if (user) {
+          res.status(200).send({ success: true, user });
+        } else {
+          res.status(404).send({ success: false, message: 'User not found' });
+        }
       } catch (error) {
-        console.error('Error updating membership:', error);
-        res.status(500).send({ error: error.message });
+        res.status(500).send({ success: false, error: error.message });
       }
     });
+
 
 
 

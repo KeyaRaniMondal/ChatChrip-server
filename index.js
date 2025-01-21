@@ -1,5 +1,5 @@
 const express = require('express');
-const stripe=require('stripe')('process.env.STRIPE_SECRET_KEY');
+const stripe = require('stripe')('process.env.STRIPE_SECRET_KEY');
 require('dotenv').config();
 const app = express();
 const cors = require('cors');
@@ -48,13 +48,13 @@ async function run() {
     // });
     app.get('/users', async (req, res) => {
       try {
-        const users = await userCollection.find().toArray(); 
+        const users = await userCollection.find().toArray();
         res.send(users);
       } catch (error) {
         res.status(500).send({ message: 'Failed to fetch users', error });
       }
     });
-    
+
 
     app.post('/users', async (req, res) => {
       const user = req.body;
@@ -66,131 +66,131 @@ async function run() {
 
     // for posts
     // API to count posts for a specific user
-app.get("/posts/count", async (req, res) => {
-  try {
-    const { email } = req.query;
+    app.get("/posts/count", async (req, res) => {
+      try {
+        const { email } = req.query;
 
-    if (!email) {
-      return res.status(400).send({ message: "Email is required" });
-    }
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
 
-    const postCount = await postCollection.countDocuments({ authoremail: email });
+        const postCount = await postCollection.countDocuments({ authoremail: email });
 
-    res.json({ count: postCount });
-  } catch (error) {
-    res.status(500).send({ message: "Error counting posts", error });
-  }
-});
-
-
-app.post('/posts', async (req, res) => {
-  try {
-    const item = req.body;
-    const { authoremail } = item;
-
-    // Count the user's posts before allowing to post a new one
-    const postCount = await postCollection.countDocuments({ authoremail });
-
-    if (postCount >= 5) {
-      return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
-    }
-
-    const result = await postCollection.insertOne(item);
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ message: 'Error posting new post', error });
-  }
-});
+        res.json({ count: postCount });
+      } catch (error) {
+        res.status(500).send({ message: "Error counting posts", error });
+      }
+    });
 
 
-app.get("/posts", async (req, res) => {
-  try {
-    const { email, search, tags, sortByPopularity } = req.query;
-    
-    const filter = {};
+    app.post('/posts', async (req, res) => {
+      try {
+        const item = req.body;
+        const { authoremail } = item;
 
-    if (email) {
-      filter.authoremail = email;
-    }
+        // Count the user's posts before allowing to post a new one
+        const postCount = await postCollection.countDocuments({ authoremail });
 
-    if (search) {
-      filter.$or = [
-        { posttitle: { $regex: search, $options: "i" } },
-        { postdescription: { $regex: search, $options: "i" } },
-      ];
-    }
+        if (postCount >= 5) {
+          return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
+        }
 
-    if (tags) {
-      filter.tags = { $all: tags.split(",") }; 
-    }
+        const result = await postCollection.insertOne(item);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Error posting new post', error });
+      }
+    });
 
-    const sort = sortByPopularity === "true"
-      ? { voteDifference: -1 }
-      : { createdAt: -1 };
 
-    const posts = await postCollection.aggregate([
-      { $match: filter },
-      {
-        $addFields: {
-          upvote: { $ifNull: ["$upvote", 0] },
-          downvote: { $ifNull: ["$downvote", 0] },
-          voteDifference: { $subtract: [{ $ifNull: ["$upvote", 0] }, { $ifNull: ["$downvote", 0] }] },
-        },
-      },
-      { $sort: sort },
-    ]).toArray();
+    app.get("/posts", async (req, res) => {
+      try {
+        const { email, search, tags, sortByPopularity } = req.query;
 
-    res.json(posts);
-  } catch (error) {
-    res.status(500).send({ message: 'Error fetching posts', error });
-  }
-});
+        const filter = {};
 
- 
+        if (email) {
+          filter.authoremail = email;
+        }
+
+        if (search) {
+          filter.$or = [
+            { posttitle: { $regex: search, $options: "i" } },
+            { postdescription: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        if (tags) {
+          filter.tags = { $all: tags.split(",") };
+        }
+
+        const sort = sortByPopularity === "true"
+          ? { voteDifference: -1 }
+          : { createdAt: -1 };
+
+        const posts = await postCollection.aggregate([
+          { $match: filter },
+          {
+            $addFields: {
+              upvote: { $ifNull: ["$upvote", 0] },
+              downvote: { $ifNull: ["$downvote", 0] },
+              voteDifference: { $subtract: [{ $ifNull: ["$upvote", 0] }, { $ifNull: ["$downvote", 0] }] },
+            },
+          },
+          { $sort: sort },
+        ]).toArray();
+
+        res.json(posts);
+      } catch (error) {
+        res.status(500).send({ message: 'Error fetching posts', error });
+      }
+    });
+
+
     //payment
     app.post('/create-payment-intent', async (req, res) => {
       const { price } = req.body;
-      const amount = Math.round(price * 100); 
-    
+      const amount = Math.round(price * 100);
+
       try {
-          const paymentIntent = await stripe.paymentIntents.create({
-              amount: amount,
-              currency: 'usd',
-              payment_method_types: ['card'],
-          });
-    
-          res.send({
-              clientSecret: paymentIntent.client_secret,
-          });
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: 'usd',
+          payment_method_types: ['card'],
+        });
+
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
       } catch (error) {
-          console.error('Error creating payment intent:', error);
-          res.status(500).send({ error: error.message });
+        console.error('Error creating payment intent:', error);
+        res.status(500).send({ error: error.message });
       }
-  });
-  
-  
-  
-  app.post('/payments', async (req, res) => {
-    const payment = req.body;
-    const paymentResult = await paymentCollection.insertOne(payment);
-    console.log(payment);
-    res.send(paymentResult);
-});
+    });
 
-app.post('/update-membership', async (req, res) => {
-  const { email } = req.body;
 
-  try {
-      const result = await userCollection.updateOne(
+
+    app.post('/payments', async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+      console.log(payment);
+      res.send(paymentResult);
+    });
+
+    app.post('/update-membership', async (req, res) => {
+      const { email } = req.body;
+
+      try {
+        const result = await userCollection.updateOne(
           { email: email },
-          { $set: { isMember: true } } 
-      );
-      res.send({ message: 'Membership updated successfully', result });
-  } catch (error) {
-      console.error('Error updating membership:', error);
-      res.status(500).send({ error: error.message });
-  }
-});
+          { $set: { isMember: true } }
+        );
+        res.send({ message: 'Membership updated successfully', result });
+      } catch (error) {
+        console.error('Error updating membership:', error);
+        res.status(500).send({ error: error.message });
+      }
+    });
 
 
 
@@ -230,7 +230,7 @@ app.post('/update-membership', async (req, res) => {
 
 
     // for adding Comments
-   
+
 
     // Ping the database
     await client.db("admin").command({ ping: 1 });

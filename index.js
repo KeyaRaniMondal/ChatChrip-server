@@ -31,6 +31,7 @@ async function run() {
     const userCollection = client.db("ForumWebsite").collection("users");
     const postCollection = client.db("ForumWebsite").collection("posts");
     const paymentCollection = client.db("ForumWebsite").collection("payments");
+    const announceCollection = client.db("ForumWebsite").collection("announcements");
 
     //for users
 
@@ -105,6 +106,31 @@ async function run() {
     });
 
 
+    // app.post('/posts', async (req, res) => {
+    //   try {
+    //     const item = req.body;
+    //     const { authoremail } = item;
+
+    //     // Count the user's posts before allowing to post a new one
+    //     const postCount = await postCollection.countDocuments({ authoremail });
+
+    //     const user = await userCollection.findOne({ authoremail });
+    //     const maxPosts = user?.maxPosts || 5;
+
+    //     if (postCount >= maxPosts) {
+    //       return res.status(400).send({ message: `You have reached your post limit of ${maxPosts}.` });
+    //     }
+
+    //     // if (postCount >= 5) {
+    //     //   return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
+    //     // }
+
+    //     const result = await postCollection.insertOne(item);
+    //     res.send(result);
+    //   } catch (error) {
+    //     res.status(500).send({ message: 'Error posting new post', error });
+    //   }
+    // });
 
 
     app.get("/posts", async (req, res) => {
@@ -194,6 +220,7 @@ async function run() {
           { $set: { badge: 'gold', membership: 'subscribed', maxPosts: 10 } },
           { returnDocument: "after" }
         )
+
         if (user) {
           res.status(200).send({ success: true, user });
         } else {
@@ -243,6 +270,23 @@ async function run() {
 
 
     // for adding Comments
+
+    //for announcements
+    app.get("/announcements", async (req, res) => {
+      try {
+        const announcements = await announceCollection.find().toArray();
+        res.send(announcements);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch announcements" });
+      }
+    });
+
+    app.post('/announcements', async (req, res) => {
+      const announcement = req.body;
+      const announceResult = await announceCollection.insertOne(announcement);
+      console.log(announcement);
+      res.send(announceResult);
+    });
 
 
     // Ping the database

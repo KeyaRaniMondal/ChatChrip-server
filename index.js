@@ -1,13 +1,37 @@
 const express = require('express');
-const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
+const stripe = require('stripe')(STRIPE_SECRET_KEY);
 require('dotenv').config();
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
 app.use(express.json());
+app.use(cookieParser());
+
+const verifyToken = (req, res, next) => {
+  const token = req?.cookies?.token;
+  if (!token) {
+    return res.status(401).send({ message: 'unAuthorized access' })
+  }
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: 'unauthorized access' })
+    }
+    req.user = decoded;
+    next();
+  })
+
+}
 
 const uri = `mongodb+srv://${process.env.db_USER}:${process.env.db_PASSWORD}@cluster0.nj8v5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -22,7 +46,7 @@ const client = new MongoClient(uri, {
 
 // for verifying admin
 const verifyAdmin = async (req, res, next) => {
-  const userEmail = req.user?.email; // Assuming you're using JWT or a session
+  const userEmail = req.user?.email; 
   if (!userEmail) {
     return res.status(401).send({ message: 'Unauthorized' });
   }
@@ -33,7 +57,7 @@ const verifyAdmin = async (req, res, next) => {
       return res.status(403).send({ message: 'Forbidden: Admins only.' });
     }
 
-    next(); // User is admin, proceed to the next middleware
+    next();
   } catch (error) {
     res.status(500).send({ message: 'Internal Server Error', error });
   }
@@ -55,6 +79,23 @@ async function run() {
     const paymentCollection = client.db("ForumWebsite").collection("payments");
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
+
+
+        //using jwt 
+        app.post('/jwt', async (req, res) => {
+          const user = req.body;
+          const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
+    
+          res
+            .cookie('token', token, cookieOptions)
+            .send({ success: true })
+    
+        });
+    
+        app.post('/logOut', (req, res) => {
+          res.clearCookie('token', { ...cookieOptions, maxAge: 0 })
+            .send({ success: true })
+        })
 
     //for users
 
@@ -381,6 +422,33 @@ async function run() {
     });
 
 
+    // app.get('/admin/stats', async (req, res) => {
+    //   try {
+    //     const admin = await userCollection.findOne({ role: 'admin' }); // Assuming admin's role is set to 'admin'
+    //     const totalPosts = await postCollection.countDocuments();
+    //     const totalComments = await commentCollection.countDocuments();
+    //     const totalUsers = await userCollection.countDocuments();
+    
+    //     res.send({
+    //       admin: {
+    //         name: admin.name,
+    //         email: admin.email,
+    //         image: admin.image, // Assuming admin has an image field
+    //         posts: admin.posts || 0, // Admin's posts count
+    //         comments: admin.comments || 0, // Admin's comments count
+    //       },
+    //       stats: {
+    //         totalPosts,
+    //         totalComments,
+    //         totalUsers,
+    //       },
+    //     });
+    //   } catch (error) {
+    //     console.error('Error fetching admin stats:', error);
+    //     res.status(500).send({ message: 'Failed to fetch admin stats', error });
+    //   }
+    // });
+    
     // Ping the database
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. Successfully connected to MongoDB!");

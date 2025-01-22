@@ -19,6 +19,28 @@ const client = new MongoClient(uri, {
   },
 });
 
+
+// for verifying admin
+const verifyAdmin = async (req, res, next) => {
+  const userEmail = req.user?.email; // Assuming you're using JWT or a session
+  if (!userEmail) {
+    return res.status(401).send({ message: 'Unauthorized' });
+  }
+
+  try {
+    const user = await userCollection.findOne({ email: userEmail });
+    if (user?.role !== 'admin') {
+      return res.status(403).send({ message: 'Forbidden: Admins only.' });
+    }
+
+    next(); // User is admin, proceed to the next middleware
+  } catch (error) {
+    res.status(500).send({ message: 'Internal Server Error', error });
+  }
+};
+
+
+
 async function run() {
   try {
     await client.connect();
@@ -65,6 +87,30 @@ async function run() {
     });
 
 
+    // for creating Admin Role
+    app.patch('/users/admin/:id', async (req, res) => {
+      const { id } = req.params;
+
+      try {
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { role: 'admin' } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ message: 'User promoted to admin successfully.' });
+        } else {
+          res.status(404).send({ message: 'User not found or already admin.' });
+        }
+      } catch (error) {
+        console.error('Error updating user role:', error);
+        res.status(500).send({ message: 'Failed to update user role.', error });
+      }
+    });
+
+    app.get('/dashboard/adminHome', verifyAdmin, (req, res) => {
+      res.send({ message: 'Welcome, Admin!' });
+    });
 
     // for posts
     // API to count posts for a specific user

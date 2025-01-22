@@ -31,6 +31,7 @@ async function run() {
     const userCollection = client.db("ForumWebsite").collection("users");
     const postCollection = client.db("ForumWebsite").collection("posts");
     const paymentCollection = client.db("ForumWebsite").collection("payments");
+    const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
 
     //for users
@@ -176,6 +177,48 @@ async function run() {
       }
     });
 
+
+    //for comments
+    app.post('/posts/:postId/comments', async (req, res) => {
+      const { postId } = req.params;
+      const { text, authorEmail } = req.body;
+    
+      if (!text) {
+        return res.status(400).send({ message: "Comment text is required." });
+      }
+    
+      try {
+        const comment = {
+          postId: new ObjectId(postId),
+          text,
+          authorEmail,
+          createdAt: new Date(),
+        };
+    
+        const result = await commentCollection.insertOne(comment);
+    
+        res.status(201).send({ message: "Comment added successfully.", comment });
+      } catch (error) {
+        console.error("Error adding comment:", error);
+        res.status(500).send({ message: "Error adding comment.", error });
+      }
+    });
+    
+    app.get("/posts/:postId/comments", async (req, res) => {
+      const { postId } = req.params;
+    
+      try {
+        const comments = await commentCollection
+          .find({ postId })
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.json(comments);
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching comments", error });
+      }
+    });
+    
+    
 
     //payment
     app.post('/create-payment-intent', async (req, res) => {

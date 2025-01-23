@@ -1,5 +1,5 @@
 const express = require('express');
-const stripe = require('stripe')('STRIPE_SECRET_KEY');
+const stripe = require('stripe')(STRIPE_SECRET_KEY);
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -9,7 +9,8 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: ['http://localhost:5173','https://forum-client-c31be.web.app','https://forum-client-c31be.firebaseapp.com'],
+  // methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true
 }));
 app.use(express.json());
@@ -74,8 +75,8 @@ const verifyAdmin = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
-    console.log("Connected to MongoDB!");
+    // await client.connect();
+    // console.log("Connected to MongoDB!");
 
     app.get('/', (req, res) => {
       res.send('Forum is running');
@@ -127,7 +128,9 @@ async function run() {
       }
     });
     
-    app.post('/users', async (req, res) => {
+    
+    
+    app.post('/users',verifyAdmin,verifyToken, async (req, res) => {
       const user = req.body;
     
       if (!user.email) {
@@ -146,8 +149,8 @@ async function run() {
         res.status(500).send({ message: 'Failed to create user', error });
       }
     });
-    
 
+    
 
     // for creating Admin Role
     app.patch('/users/admin/:id', async (req, res) => {
@@ -179,7 +182,7 @@ async function run() {
     });
     
 
-    app.get('/users/admin/:email', async (req, res) => {
+    app.get('/users/admin/:email',async (req, res) => {
       const email = req.params.email;
   
       try {
@@ -352,6 +355,27 @@ async function run() {
       }
     });
 
+//report Comment
+app.post('/comments/:commentId/report', async (req, res) => {
+  const { commentId } = req.params;
+  const { feedback } = req.body;
+
+  try {
+    const comment = await commentCollection.findById(commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    await ReportedComment.create({
+      commentId: comment._id,
+      authorEmail: comment.authorEmail,
+      text: comment.text,
+      feedback,
+      reportedAt: new Date(),
+    });
+
+    res.status(200).json({ message: 'Comment reported successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error reporting comment', error });
+  }
+});
 
 
 
@@ -385,7 +409,7 @@ async function run() {
       res.send(paymentResult);
     });
 
-    app.post('/update-membership',verifyAdmin ,verifyToken, async (req, res) => {
+    app.post('/update-membership',verifyAdmin,verifyToken,async (req, res) => {
       const { email, paymentId } = req.body;
       try {
         const payment = await paymentCollection.findOne({ paymentId });
@@ -450,7 +474,7 @@ async function run() {
     // for adding Comments
 
     //for announcements
-    app.get("/announcements", async (req, res) => {
+    app.get("/announcements",verifyAdmin ,verifyToken, async (req, res) => {
       try {
         const announcements = await announceCollection.find().toArray();
         res.send(announcements);
@@ -459,7 +483,7 @@ async function run() {
       }
     });
 
-    app.post('/announcements',verifyAdmin ,verifyToken, async (req, res) => {
+    app.post('/announcements', async (req, res) => {
       const announcement = req.body;
       const announceResult = await announceCollection.insertOne(announcement);
       console.log(announcement);
@@ -495,8 +519,8 @@ async function run() {
     // });
     
     // Ping the database
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. Successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. Successfully connected to MongoDB!");
   } catch (err) {
     console.error("Error connecting to MongoDB:", err);
   } finally {

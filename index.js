@@ -1,13 +1,41 @@
 const express = require('express');
-const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
+const stripe = require('stripe')('STRIPE_SECRET_KEY');
 require('dotenv').config();
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
+const verifyToken = (req, res, next) => {
+  const token = req?.cookies?.token;
+  if (!token) {
+    return res.status(401).send({ message: 'unAuthorized access' })
+  }
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: 'unauthorized access' })
+    }
+    req.user = decoded;
+    next();
+  })
+
+}
 
 const uri = `mongodb+srv://${process.env.db_USER}:${process.env.db_PASSWORD}@cluster0.nj8v5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -58,6 +86,23 @@ async function run() {
     const paymentCollection = client.db("ForumWebsite").collection("payments");
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
+
+
+        //using jwt 
+        app.post('/jwt', async (req, res) => {
+          const user = req.body;
+          const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
+    
+          res
+            .cookie('token', token, cookieOptions)
+            .send({ success: true })
+    
+        });
+    
+        app.post('/logOut', (req, res) => {
+          res.clearCookie('token', { ...cookieOptions, maxAge: 0 })
+            .send({ success: true })
+        })
 
     //for users
 
@@ -266,7 +311,7 @@ async function run() {
 
 
     //for comments
-    app.post('/posts/:postId/comments', async (req, res) => {
+    app.post('/posts/:postId/comments',verifyToken, async (req, res) => {
       const { postId } = req.params;
       const { text, authorEmail } = req.body;
 
@@ -311,7 +356,7 @@ async function run() {
 
 
     //payment
-    app.post('/create-payment-intent', async (req, res) => {
+    app.post('/create-payment-intent',verifyToken, async (req, res) => {
       const { price } = req.body;
       const amount = Math.round(price * 100);
 
@@ -340,7 +385,7 @@ async function run() {
       res.send(paymentResult);
     });
 
-    app.post('/update-membership',verifyAdmin , async (req, res) => {
+    app.post('/update-membership',verifyAdmin ,verifyToken, async (req, res) => {
       const { email, paymentId } = req.body;
       try {
         const payment = await paymentCollection.findOne({ paymentId });
@@ -369,7 +414,7 @@ async function run() {
 
 
     //Post Details
-    app.get('/posts/:id', async (req, res) => {
+    app.get('/posts/:id',verifyToken, async (req, res) => {
       try {
         const postId = req.params.id
         const post = await postCollection.findOne({ _id: new ObjectId(postId) });
@@ -414,7 +459,7 @@ async function run() {
       }
     });
 
-    app.post('/announcements',verifyAdmin , async (req, res) => {
+    app.post('/announcements',verifyAdmin ,verifyToken, async (req, res) => {
       const announcement = req.body;
       const announceResult = await announceCollection.insertOne(announcement);
       console.log(announcement);

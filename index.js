@@ -1,37 +1,13 @@
 const express = require('express');
-const stripe = require('stripe')(STRIPE_SECRET_KEY);
+const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
 require('dotenv').config();
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
 const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
-const cookieOptions = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-};
-
+app.use(cors());
 app.use(express.json());
-app.use(cookieParser());
-
-const verifyToken = (req, res, next) => {
-  const token = req?.cookies?.token;
-  if (!token) {
-    return res.status(401).send({ message: 'unAuthorized access' })
-  }
-
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(401).send({ message: 'unauthorized access' })
-    }
-    req.user = decoded;
-    next();
-  })
-
-}
 
 const uri = `mongodb+srv://${process.env.db_USER}:${process.env.db_PASSWORD}@cluster0.nj8v5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -53,11 +29,14 @@ const verifyAdmin = async (req, res, next) => {
 
   try {
     const user = await userCollection.findOne({ email: userEmail });
-    if (user?.role !== 'admin') {
-      return res.status(403).send({ message: 'Forbidden: Admins only.' });
+    if (!user) {
+      return res.status(404).send({ message: 'User not found.' });
     }
 
-    next();
+    if (user.role !== 'admin') {
+      return res.status(403).send({ message: 'Forbidden: Admins only.' });
+    }
+    next(); 
   } catch (error) {
     res.status(500).send({ message: 'Internal Server Error', error });
   }
@@ -79,23 +58,6 @@ async function run() {
     const paymentCollection = client.db("ForumWebsite").collection("payments");
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
-
-
-        //using jwt 
-        app.post('/jwt', async (req, res) => {
-          const user = req.body;
-          const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
-    
-          res
-            .cookie('token', token, cookieOptions)
-            .send({ success: true })
-    
-        });
-    
-        app.post('/logOut', (req, res) => {
-          res.clearCookie('token', { ...cookieOptions, maxAge: 0 })
-            .send({ success: true })
-        })
 
     //for users
 
@@ -119,39 +81,77 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch users', error });
       }
     });
-
-
+    
     app.post('/users', async (req, res) => {
       const user = req.body;
-      const result = await userCollection.insertOne(user);
-      res.send(result);
+    
+      if (!user.email) {
+        return res.status(400).send({ message: 'Email is required.' });
+      }
+    
+      try {
+        const existingUser = await userCollection.findOne({ email: user.email });
+        if (existingUser) {
+          return res.status(409).send({ message: 'User already exists.' });
+        }
+    
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to create user', error });
+      }
     });
+    
 
 
     // for creating Admin Role
     app.patch('/users/admin/:id', async (req, res) => {
       const { id } = req.params;
-
+    
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ message: 'Invalid user ID.' });
+      }
+    
       try {
+        const user = await userCollection.findOne({ _id: new ObjectId(id) });
+        if (!user) {
+          return res.status(404).send({ message: 'User not found.' });
+        }
+    
+        if (user.role === 'admin') {
+          return res.status(400).send({ message: 'User is already an admin.' });
+        }
+    
         const result = await userCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { role: 'admin' } }
         );
-
-        if (result.modifiedCount > 0) {
-          res.send({ message: 'User promoted to admin successfully.' });
-        } else {
-          res.status(404).send({ message: 'User not found or already admin.' });
-        }
+    
+        res.send({ message: 'User promoted to admin successfully.' });
       } catch (error) {
-        console.error('Error updating user role:', error);
         res.status(500).send({ message: 'Failed to update user role.', error });
       }
     });
+    
 
-    app.get('/dashboard/adminHome', verifyAdmin, (req, res) => {
-      res.send({ message: 'Welcome, Admin!' });
-    });
+    app.get('/users/admin/:email', async (req, res) => {
+      const email = req.params.email;
+  
+      try {
+          const user = await userCollection.findOne({ email });
+  
+          if (!user) {
+              return res.status(404).send({ admin: false, message: 'User not found' });
+          }
+  
+          const isAdmin = user.role === 'admin';
+          res.send({ admin: isAdmin });
+      } catch (error) {
+          console.error("Error verifying admin status:", error);
+          res.status(500).send({ message: "Error verifying admin status" });
+      }
+  });
+  
 
     // for posts
     // API to count posts for a specific user
@@ -340,7 +340,7 @@ async function run() {
       res.send(paymentResult);
     });
 
-    app.post('/update-membership', async (req, res) => {
+    app.post('/update-membership',verifyAdmin , async (req, res) => {
       const { email, paymentId } = req.body;
       try {
         const payment = await paymentCollection.findOne({ paymentId });
@@ -414,7 +414,7 @@ async function run() {
       }
     });
 
-    app.post('/announcements', async (req, res) => {
+    app.post('/announcements',verifyAdmin , async (req, res) => {
       const announcement = req.body;
       const announceResult = await announceCollection.insertOne(announcement);
       console.log(announcement);

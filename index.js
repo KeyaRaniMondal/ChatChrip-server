@@ -105,20 +105,7 @@ async function run() {
             .send({ success: true })
         })
 
-    //for users
-
-    // app.get('/users', async (req, res) => {
-    //   const email = req.query.email;
-    //   if (!email) {
-    //     return res.status(400).send({ message: "Email is required" });
-    //   }
-    //   const result = await userCollection.findOne({ email });
-    //   if (result) {
-    //     res.send(result);
-    //   } else {
-    //     res.status(404).send({ message: "User not found" });
-    //   }
-    // });
+        // for users
     app.get('/users', async (req, res) => {
       try {
         const users = await userCollection.find().toArray();
@@ -130,25 +117,12 @@ async function run() {
     
     
     
-    app.post('/users',verifyAdmin,verifyToken, async (req, res) => {
-      const user = req.body;
-    
-      if (!user.email) {
-        return res.status(400).send({ message: 'Email is required.' });
-      }
-    
-      try {
-        const existingUser = await userCollection.findOne({ email: user.email });
-        if (existingUser) {
-          return res.status(409).send({ message: 'User already exists.' });
-        }
-    
-        const result = await userCollection.insertOne(user);
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: 'Failed to create user', error });
-      }
-    });
+    app.post('/users', async (req, res) => {
+      const newUser = req.body;
+      console.log('creating', newUser)
+      const result = await userCollection.insertOne(newUser)
+      res.send(result)
+    })
 
     
 
@@ -241,32 +215,7 @@ async function run() {
       }
     });
 
-
-    // app.post('/posts', async (req, res) => {
-    //   try {
-    //     const item = req.body;
-    //     const { authoremail } = item;
-
-    //     // Count the user's posts before allowing to post a new one
-    //     const postCount = await postCollection.countDocuments({ authoremail });
-
-    //     const user = await userCollection.findOne({ authoremail });
-    //     const maxPosts = user?.maxPosts || 5;
-
-    //     if (postCount >= maxPosts) {
-    //       return res.status(400).send({ message: `You have reached your post limit of ${maxPosts}.` });
-    //     }
-
-    //     // if (postCount >= 5) {
-    //     //   return res.status(400).send({ message: "You have reached the limit of 5 posts. Please become a member to post more." });
-    //     // }
-
-    //     const result = await postCollection.insertOne(item);
-    //     res.send(result);
-    //   } catch (error) {
-    //     res.status(500).send({ message: 'Error posting new post', error });
-    //   }
-    // });
+  
 
 
     app.get("/posts", async (req, res) => {
@@ -313,6 +262,25 @@ async function run() {
     });
 
 
+    //delete post
+    app.delete("/posts/:postId", async (req, res) => {
+      const { postId } = req.params;
+    
+      try {
+        const result = await postCollection.deleteOne({ _id: new ObjectId(postId) });
+    
+        if (result.deletedCount === 1) {
+          res.json({ message: "Post deleted successfully" });
+        } else {
+          res.status(404).send({ message: "Post not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting post:", error);
+        res.status(500).send({ message: "Error deleting post" });
+      }
+    });
+
+
     //for comments
     app.post('/posts/:postId/comments',verifyToken, async (req, res) => {
       const { postId } = req.params;
@@ -354,6 +322,16 @@ async function run() {
         res.status(500).send({ message: "Error fetching comments", error });
       }
     });
+    app.get("/comments", verifyToken, async (req, res) => {
+      try {
+        const comments = await commentCollection.find().toArray();
+        res.send(comments);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch comments" });
+      }
+    });
+    
+    
 
 //report Comment
 app.post('/comments/:commentId/report', async (req, res) => {
@@ -409,7 +387,7 @@ app.post('/comments/:commentId/report', async (req, res) => {
       res.send(paymentResult);
     });
 
-    app.post('/update-membership',verifyAdmin,verifyToken,async (req, res) => {
+    app.post('/update-membership',async (req, res) => {
       const { email, paymentId } = req.body;
       try {
         const payment = await paymentCollection.findOne({ paymentId });
@@ -433,7 +411,23 @@ app.post('/comments/:commentId/report', async (req, res) => {
       }
     });
 
+    app.get('/payment-status/:email', async (req, res) => {
+      const { email } = req.params;
+  
+      try {
 
+          const payment = await paymentCollection.findOne({ email, status: "success" }, { sort: { date: -1 } });
+  
+          if (!payment) {
+              return res.status(404).send({ success: false, message: 'No successful payment found.' });
+          }
+  
+          res.status(200).send({ success: true, transactionId: payment.transactionId, price: payment.price });
+      } catch (error) {
+          res.status(500).send({ success: false, message: 'Error fetching payment status', error: error.message });
+      }
+  });
+  
 
 
 
@@ -474,7 +468,7 @@ app.post('/comments/:commentId/report', async (req, res) => {
     // for adding Comments
 
     //for announcements
-    app.get("/announcements",verifyAdmin ,verifyToken, async (req, res) => {
+    app.get("/announcements",verifyToken,async (req, res) => {
       try {
         const announcements = await announceCollection.find().toArray();
         res.send(announcements);
@@ -491,32 +485,6 @@ app.post('/comments/:commentId/report', async (req, res) => {
     });
 
 
-    // app.get('/admin/stats', async (req, res) => {
-    //   try {
-    //     const admin = await userCollection.findOne({ role: 'admin' }); // Assuming admin's role is set to 'admin'
-    //     const totalPosts = await postCollection.countDocuments();
-    //     const totalComments = await commentCollection.countDocuments();
-    //     const totalUsers = await userCollection.countDocuments();
-    
-    //     res.send({
-    //       admin: {
-    //         name: admin.name,
-    //         email: admin.email,
-    //         image: admin.image, // Assuming admin has an image field
-    //         posts: admin.posts || 0, // Admin's posts count
-    //         comments: admin.comments || 0, // Admin's comments count
-    //       },
-    //       stats: {
-    //         totalPosts,
-    //         totalComments,
-    //         totalUsers,
-    //       },
-    //     });
-    //   } catch (error) {
-    //     console.error('Error fetching admin stats:', error);
-    //     res.status(500).send({ message: 'Failed to fetch admin stats', error });
-    //   }
-    // });
     
     // Ping the database
     // await client.db("admin").command({ ping: 1 });

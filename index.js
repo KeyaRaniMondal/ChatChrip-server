@@ -1,5 +1,5 @@
 const express = require('express');
-const stripe = require('stripe')(STRIPE_SECRET_KEY);
+const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
@@ -87,6 +87,7 @@ async function run() {
     const paymentCollection = client.db("ForumWebsite").collection("payments");
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
+    const questionCollection = client.db("ForumWebsite").collection("aquestions");
 
 
         //using jwt 
@@ -125,6 +126,29 @@ async function run() {
     })
 
     
+    //For asking Questions
+    app.post("/questions", async (req, res) => {
+      try {
+        const question = { text: req.body.text, createdAt: new Date() };
+        const result = await questionCollection.insertOne(question);
+        res.json({ id: result.insertedId, ...question });
+      } catch (error) {
+        console.error("Error saving question:", error);
+        res.status(500).json({ message: "Error saving question" });
+      }
+    });
+    
+    //Fetch Questions
+    app.get("/questions", async (req, res) => {
+      try {
+        const questions = await questionCollection.find().sort({ createdAt: -1 }).limit(10).toArray();
+        res.json(questions);
+      } catch (error) {
+        console.error("Error fetching questions:", error);
+        res.status(500).json({ message: "Error fetching questions" });
+      }
+    }
+    )
 
     // for creating Admin Role
     app.patch('/users/admin/:id', async (req, res) => {

@@ -1,3 +1,4 @@
+const ai = require("./ai");
 const express = require('express');
 const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
 require('dotenv').config();

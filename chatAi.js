@@ -5,6 +5,21 @@ require('dotenv').config()
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+
+
+router.post('/textAi',async(req,res)=>{
+try{
+    const ai=req.body
+    const {authoremail}=ai
+    const result=await textAiCollection.insertOne(ai)
+    res.send(result)
+}
+catch(error)
+{
+    res.status(500).send({ message: 'Error posting new post', error })
+}
+})
+
 router.get('/textAi', async (req, res) => {
     try {
       const prompt = req.query?.prompt;
@@ -14,7 +29,7 @@ router.get('/textAi', async (req, res) => {
       }
 
       const result = await model.generateContent(prompt);
-      const response = await result.response.text();
+      const response = result.response.text();
 
       console.log("AI Response:", response);
       res.json({ answer: response });

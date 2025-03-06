@@ -8,7 +8,6 @@ const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
-
 app.use(cors({
   origin: ['http://localhost:5173', 'https://forum-client-c31be.web.app', 'https://forum-client-c31be.firebaseapp.com'],
   // methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
@@ -79,7 +78,7 @@ async function run() {
     // await client.connect();
     // console.log("Connected to MongoDB!");
     //Integration of Ai
-   
+
 
     app.get('/', (req, res) => {
       res.send('Forum is running');
@@ -91,6 +90,8 @@ async function run() {
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
     const questionCollection = client.db("ForumWebsite").collection("aquestions");
+    
+const textAiCollection = client.db("ForumWebsite").collection("textAi");
 
 
     //using jwt 
@@ -110,8 +111,10 @@ async function run() {
     })
 
     // for AI
-    app.use("/chatApi",chatAiRoutes)
+
     
+    app.use("/chatApi", chatAiRoutes)
+
     // for users
     app.get('/users', async (req, res) => {
       try {

@@ -1,19 +1,16 @@
-const ai = require("./ai");
+const chatAiRoutes = require("./chatAi");
 const express = require('express');
-const stripe = require('stripe')('sk_test_51Qf2NTA9P4PURBiwgPJJtOKkt6QJtFTx1KBetGoUokoT5EowSb1AsDT6Vk2YrwD6trJFzULb9qBSSe4IrAc12TaZ00CY0ANucb');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 app.use(cors({
-  origin: ['http://localhost:5173','https://forum-client-c31be.web.app','https://forum-client-c31be.firebaseapp.com'],
+  origin: ['http://localhost:5173', 'https://forum-client-c31be.web.app', 'https://forum-client-c31be.firebaseapp.com'],
   // methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true
 }));
@@ -55,7 +52,7 @@ const client = new MongoClient(uri, {
 
 // for verifying admin
 const verifyAdmin = async (req, res, next) => {
-  const userEmail = req.user?.email; 
+  const userEmail = req.user?.email;
   if (!userEmail) {
     return res.status(401).send({ message: 'Unauthorized' });
   }
@@ -69,7 +66,7 @@ const verifyAdmin = async (req, res, next) => {
     if (user.role !== 'admin') {
       return res.status(403).send({ message: 'Forbidden: Admins only.' });
     }
-    next(); 
+    next();
   } catch (error) {
     res.status(500).send({ message: 'Internal Server Error', error });
   }
@@ -81,25 +78,8 @@ async function run() {
   try {
     // await client.connect();
     // console.log("Connected to MongoDB!");
-        //Integration of Ai
-        app.get('/textAi', async (req, res) => {
-          try {
-            const prompt = req.query?.prompt;
-            
-            if (!prompt) {
-              return res.status(400).json({ message: "Please provide a prompt in query" });
-            }
-        
-            const result = await model.generateContent(prompt);
-            const response = await result.response.text();
-        
-            console.log("AI Response:", response);
-            res.json({ answer: response });
-          } catch (error) {
-            console.error("AI API Error:", error);
-            res.status(500).json({ message: "AI integration failed", error: error.message });
-          }
-        });
+    //Integration of Ai
+   
 
     app.get('/', (req, res) => {
       res.send('Forum is running');
@@ -113,23 +93,26 @@ async function run() {
     const questionCollection = client.db("ForumWebsite").collection("aquestions");
 
 
-        //using jwt 
-        app.post('/jwt', async (req, res) => {
-          const user = req.body;
-          const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
-    
-          res
-            .cookie('token', token, cookieOptions)
-            .send({ success: true })
-    
-        });
-    
-        app.post('/logOut', (req, res) => {
-          res.clearCookie('token', { ...cookieOptions, maxAge: 0 })
-            .send({ success: true })
-        })
+    //using jwt 
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' });
 
-        // for users
+      res
+        .cookie('token', token, cookieOptions)
+        .send({ success: true })
+
+    });
+
+    app.post('/logOut', (req, res) => {
+      res.clearCookie('token', { ...cookieOptions, maxAge: 0 })
+        .send({ success: true })
+    })
+
+    // for AI
+    app.use("/chatApi",chatAiRoutes)
+    
+    // for users
     app.get('/users', async (req, res) => {
       try {
         const users = await userCollection.find().toArray();
@@ -138,9 +121,9 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch users', error });
       }
     });
-    
-    
-    
+
+
+
     app.post('/users', async (req, res) => {
       const newUser = req.body;
       console.log('creating', newUser)
@@ -148,7 +131,7 @@ async function run() {
       res.send(result)
     })
 
-    
+
     //For asking Questions
     app.post("/questions", async (req, res) => {
       try {
@@ -160,7 +143,7 @@ async function run() {
         res.status(500).json({ message: "Error saving question" });
       }
     });
-    
+
     //Fetch Questions
     app.get("/questions", async (req, res) => {
       try {
@@ -176,51 +159,51 @@ async function run() {
     // for creating Admin Role
     app.patch('/users/admin/:id', async (req, res) => {
       const { id } = req.params;
-    
+
       if (!ObjectId.isValid(id)) {
         return res.status(400).send({ message: 'Invalid user ID.' });
       }
-    
+
       try {
         const user = await userCollection.findOne({ _id: new ObjectId(id) });
         if (!user) {
           return res.status(404).send({ message: 'User not found.' });
         }
-    
+
         if (user.role === 'admin') {
           return res.status(400).send({ message: 'User is already an admin.' });
         }
-    
+
         const result = await userCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { role: 'admin' } }
         );
-    
+
         res.send({ message: 'User promoted to admin successfully.' });
       } catch (error) {
         res.status(500).send({ message: 'Failed to update user role.', error });
       }
     });
-    
 
-    app.get('/users/admin/:email',async (req, res) => {
+
+    app.get('/users/admin/:email', async (req, res) => {
       const email = req.params.email;
-  
+
       try {
-          const user = await userCollection.findOne({ email });
-  
-          if (!user) {
-              return res.status(404).send({ admin: false, message: 'User not found' });
-          }
-  
-          const isAdmin = user.role === 'admin';
-          res.send({ admin: isAdmin });
+        const user = await userCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ admin: false, message: 'User not found' });
+        }
+
+        const isAdmin = user.role === 'admin';
+        res.send({ admin: isAdmin });
       } catch (error) {
-          console.error("Error verifying admin status:", error);
-          res.status(500).send({ message: "Error verifying admin status" });
+        console.error("Error verifying admin status:", error);
+        res.status(500).send({ message: "Error verifying admin status" });
       }
-  });
-  
+    });
+
 
     // for posts
     // API to count posts for a specific user
@@ -262,7 +245,7 @@ async function run() {
       }
     });
 
-  
+
 
 
     app.get("/posts", async (req, res) => {
@@ -312,10 +295,10 @@ async function run() {
     //delete post
     app.delete("/posts/:postId", async (req, res) => {
       const { postId } = req.params;
-    
+
       try {
         const result = await postCollection.deleteOne({ _id: new ObjectId(postId) });
-    
+
         if (result.deletedCount === 1) {
           res.json({ message: "Post deleted successfully" });
         } else {
@@ -329,7 +312,7 @@ async function run() {
 
 
     //for comments
-    app.post('/posts/:postId/comments',verifyToken, async (req, res) => {
+    app.post('/posts/:postId/comments', verifyToken, async (req, res) => {
       const { postId } = req.params;
       const { text, authorEmail } = req.body;
 
@@ -377,35 +360,35 @@ async function run() {
         res.status(500).json({ error: "Failed to fetch comments" });
       }
     });
-    
-    
 
-//report Comment
-app.post('/comments/:commentId/report', async (req, res) => {
-  const { commentId } = req.params;
-  const { feedback } = req.body;
 
-  try {
-    const comment = await commentCollection.findById(commentId);
-    if (!comment) return res.status(404).json({ message: 'Comment not found' });
-    await ReportedComment.create({
-      commentId: comment._id,
-      authorEmail: comment.authorEmail,
-      text: comment.text,
-      feedback,
-      reportedAt: new Date(),
+
+    //report Comment
+    app.post('/comments/:commentId/report', async (req, res) => {
+      const { commentId } = req.params;
+      const { feedback } = req.body;
+
+      try {
+        const comment = await commentCollection.findById(commentId);
+        if (!comment) return res.status(404).json({ message: 'Comment not found' });
+        await ReportedComment.create({
+          commentId: comment._id,
+          authorEmail: comment.authorEmail,
+          text: comment.text,
+          feedback,
+          reportedAt: new Date(),
+        });
+
+        res.status(200).json({ message: 'Comment reported successfully' });
+      } catch (error) {
+        res.status(500).json({ message: 'Error reporting comment', error });
+      }
     });
-
-    res.status(200).json({ message: 'Comment reported successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error reporting comment', error });
-  }
-});
 
 
 
     //payment
-    app.post('/create-payment-intent',verifyToken, async (req, res) => {
+    app.post('/create-payment-intent', verifyToken, async (req, res) => {
       const { price } = req.body;
       const amount = Math.round(price * 100);
 
@@ -434,7 +417,7 @@ app.post('/comments/:commentId/report', async (req, res) => {
       res.send(paymentResult);
     });
 
-    app.post('/update-membership',async (req, res) => {
+    app.post('/update-membership', async (req, res) => {
       const { email, paymentId } = req.body;
       try {
         const payment = await paymentCollection.findOne({ paymentId });
@@ -460,26 +443,26 @@ app.post('/comments/:commentId/report', async (req, res) => {
 
     app.get('/payment-status/:email', async (req, res) => {
       const { email } = req.params;
-  
+
       try {
 
-          const payment = await paymentCollection.findOne({ email, status: "success" }, { sort: { date: -1 } });
-  
-          if (!payment) {
-              return res.status(404).send({ success: false, message: 'No successful payment found.' });
-          }
-  
-          res.status(200).send({ success: true, transactionId: payment.transactionId, price: payment.price });
+        const payment = await paymentCollection.findOne({ email, status: "success" }, { sort: { date: -1 } });
+
+        if (!payment) {
+          return res.status(404).send({ success: false, message: 'No successful payment found.' });
+        }
+
+        res.status(200).send({ success: true, transactionId: payment.transactionId, price: payment.price });
       } catch (error) {
-          res.status(500).send({ success: false, message: 'Error fetching payment status', error: error.message });
+        res.status(500).send({ success: false, message: 'Error fetching payment status', error: error.message });
       }
-  });
-  
+    });
+
 
 
 
     //Post Details
-    app.get('/posts/:id',verifyToken, async (req, res) => {
+    app.get('/posts/:id', verifyToken, async (req, res) => {
       try {
         const postId = req.params.id
         const post = await postCollection.findOne({ _id: new ObjectId(postId) });
@@ -515,7 +498,7 @@ app.post('/comments/:commentId/report', async (req, res) => {
     // for adding Comments
 
     //for announcements
-    app.get("/announcements",verifyToken,async (req, res) => {
+    app.get("/announcements", verifyToken, async (req, res) => {
       try {
         const announcements = await announceCollection.find().toArray();
         res.send(announcements);
@@ -532,7 +515,7 @@ app.post('/comments/:commentId/report', async (req, res) => {
     });
 
 
-    
+
     // Ping the database
     // await client.db("admin").command({ ping: 1 });
     // console.log("Pinged your deployment. Successfully connected to MongoDB!");

@@ -89,7 +89,7 @@ async function run() {
     const paymentCollection = client.db("ForumWebsite").collection("payments");
     const commentCollection = client.db("ForumWebsite").collection("comments");
     const announceCollection = client.db("ForumWebsite").collection("announcements");
-    const questionCollection = client.db("ForumWebsite").collection("aquestions");
+    const questionCollection = client.db("ForumWebsite").collection("questions");
     
 const textAiCollection = client.db("ForumWebsite").collection("textAi");
 

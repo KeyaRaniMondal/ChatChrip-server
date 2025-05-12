@@ -168,6 +168,56 @@ const textAiCollection = client.db("ForumWebsite").collection("textAi");
     }
     )
 
+    // Post an answer to a specific question
+    app.post("/questions/:id/answers", async (req, res) => {
+      try {
+        const questionId = req.params.id;
+        const { text, userName } = req.body;
+
+        const answer = {
+          text,
+          userName,
+          createdAt: new Date(),
+        };
+
+        const result = await questionCollection.updateOne(
+          { _id: new ObjectId(questionId) },
+          { $push: { answers: answer } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ message: "Question not found" });
+        }
+
+        res.status(201).json({ message: "Answer added", answer });
+      } catch (error) {
+        console.error("Error posting answer:", error);
+        res.status(500).json({ message: "Error posting answer" });
+      }
+    });
+
+    // Get all answers for a specific question
+    app.get("/questions/:id/answers", async (req, res) => {
+      try {
+        const questionId = req.params.id;
+
+        const question = await questionCollection.findOne(
+          { _id: new ObjectId(questionId) },
+          { projection: { answers: 1 } }
+        );
+
+        if (!question) {
+          return res.status(404).json({ message: "Question not found" });
+        }
+
+        res.json(question.answers || []);
+      } catch (error) {
+        console.error("Error fetching answers:", error);
+        res.status(500).json({ message: "Error fetching answers" });
+      }
+    });
+
+
     // for creating Admin Role
     app.patch('/users/admin/:id', async (req, res) => {
       const { id } = req.params;

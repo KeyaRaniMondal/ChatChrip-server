@@ -138,7 +138,15 @@ const textAiCollection = client.db("ForumWebsite").collection("textAi");
     //For asking Questions
     app.post("/questions", async (req, res) => {
       try {
-        const question = { text: req.body.text, createdAt: new Date() };
+        const { title, description, user } = req.body;
+
+        const question = {
+          title,
+          description,
+          user,
+          createdAt: new Date(),
+        };
+
         const result = await questionCollection.insertOne(question);
         res.json({ id: result.insertedId, ...question });
       } catch (error) {
@@ -146,6 +154,7 @@ const textAiCollection = client.db("ForumWebsite").collection("textAi");
         res.status(500).json({ message: "Error saving question" });
       }
     });
+    
 
     //Fetch Questions
     app.get("/questions", async (req, res) => {
